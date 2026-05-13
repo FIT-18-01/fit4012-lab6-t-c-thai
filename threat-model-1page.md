@@ -2,8 +2,9 @@
 
 ## Thông tin nhóm
 
-- Thành viên 1: TODO_STUDENT
-- Thành viên 2: TODO_STUDENT
+- Thành viên 1: Phạm Văn Chung
+- Thành viên 2: Vũ Hồng Sơn
+
 
 ## Assets
 
@@ -24,14 +25,13 @@ TODO_STUDENT: Nêu ít nhất 3 mối đe dọa cụ thể, ví dụ:
 
 ## Mitigations
 
-TODO_STUDENT: Nêu ít nhất 3 biện pháp giảm thiểu, ví dụ:
-- Không gửi key plaintext trong hệ thống thật.
-- Dùng TLS hoặc cơ chế trao đổi khóa an toàn.
-- Dùng AES-GCM để có xác thực dữ liệu.
-- Không ghi key thật vào log trong môi trường thật.
-- Thêm nonce/timestamp để giảm replay.
-- Thêm xác thực Sender.
+- Không truyền AES key dưới dạng plaintext trong hệ thống thực tế.
+- Sử dụng TLS hoặc cơ chế trao đổi khóa an toàn để bảo vệ key channel.
+- Dùng AES-GCM hoặc thêm HMAC để kiểm tra tính toàn vẹn và xác thực dữ liệu.
+- Không ghi key thật hoặc thông tin nhạy cảm vào log trong môi trường production.
+- Thêm nonce hoặc timestamp để giảm nguy cơ replay attack.
+- Thêm cơ chế xác thực Sender trước khi Receiver chấp nhận dữ liệu.
 
 ## Residual risks
 
-TODO_STUDENT: Nêu ít nhất 1 rủi ro còn lại, ví dụ hệ thống vẫn chưa an toàn vì key channel chỉ là mô phỏng, chưa có TLS, chưa có xác thực và chưa chống replay đầy đủ.
+Hệ thống vẫn còn một số rủi ro vì key channel chỉ mang tính mô phỏng và chưa sử dụng TLS thực sự. Ngoài ra, chương trình chưa có cơ chế xác thực đầy đủ giữa Sender và Receiver, đồng thời replay attack vẫn chưa được ngăn chặn hoàn toàn trong mọi trường hợp.

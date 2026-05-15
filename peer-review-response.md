@@ -1,12 +1,17 @@
 # Peer Review Response
 
-## Nhận xét peer review
+## Peer feedback summary
 
-- Đã kiểm tra chức năng AES-CBC sender/receiver.
-- Đã bổ sung test cho key channel và data channel.
-- Đã sửa lỗi import module trong pytest bằng conftest.py.
-- Đã thêm log minh chứng và cập nhật README.
+Nhóm đã review các phần sender, receiver, AES-CBC, logging và test.
 
-## Phản hồi
+## Issues found
 
-Nhóm đã rà soát lại toàn bộ test local sender-receiver và cập nhật cấu trúc repo để phù hợp CI.
+- Cần xử lý retry khi socket chưa sẵn sàng.
+- Cần bổ sung file peer-review-response.md để đúng submission contract.
+- Cần kiểm tra timing giữa key channel và data channel.
+
+## Improvements applied
+
+- Đã thêm retry logic cho sender socket connection.
+- Đã thêm delay ngắn giữa key channel và data channel.
+- Đã bổ sung đầy đủ file yêu cầu của repo.

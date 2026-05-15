@@ -13,7 +13,8 @@ MESSAGE_ENV = os.getenv("MESSAGE")
 INPUT_FILE = os.getenv("INPUT_FILE", "")
 LOG_FILE = os.getenv("SENDER_LOG_FILE", "")
 TIMEOUT = float(os.getenv("SOCKET_TIMEOUT", "10"))
-MAX_CONNECT_ATTEMPTS = int(os.getenv("CONNECT_RETRY_ATTEMPTS", "5"))
+
+MAX_CONNECT_ATTEMPTS = int(os.getenv("CONNECT_RETRY_ATTEMPTS", "50"))
 CONNECT_RETRY_DELAY = float(os.getenv("CONNECT_RETRY_DELAY", "0.1"))
 
 
@@ -21,36 +22,55 @@ def get_plaintext() -> bytes:
     """Read plaintext from INPUT_FILE, MESSAGE, or keyboard input."""
     if INPUT_FILE:
         return Path(INPUT_FILE).read_bytes()
+
     if MESSAGE_ENV is not None:
         return MESSAGE_ENV.encode("utf-8")
+
     return input("Nhập bản tin: ").encode("utf-8")
 
 
 def send_packet(host: str, port: int, packet: bytes) -> None:
-    """Open one TCP connection and send all bytes."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(TIMEOUT)
+    """Open TCP connection and send all bytes with retry."""
+    last_error = None
 
-        for attempt in range(1, MAX_CONNECT_ATTEMPTS + 1):
-            try:
+    for attempt in range(MAX_CONNECT_ATTEMPTS):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(TIMEOUT)
                 sock.connect((host, port))
-                break
-            except (ConnectionRefusedError, socket.timeout):
-                if attempt == MAX_CONNECT_ATTEMPTS:
-                    raise
-                time.sleep(CONNECT_RETRY_DELAY)
+                sock.sendall(packet)
+                return
 
-        sock.sendall(packet)
+        except (
+            ConnectionRefusedError,
+            ConnectionAbortedError,
+            socket.timeout,
+            OSError,
+        ) as exc:
+            last_error = exc
+            time.sleep(CONNECT_RETRY_DELAY)
+
+    raise last_error
 
 
 def main() -> None:
     plaintext = get_plaintext()
-    key, iv, ciphertext = encrypt_aes_cbc(plaintext, key_size=AES_KEY_SIZE)
+
+    key, iv, ciphertext = encrypt_aes_cbc(
+        plaintext,
+        key_size=AES_KEY_SIZE,
+    )
 
     key_packet = build_key_packet(key, iv)
     data_packet = build_data_packet(ciphertext)
 
+    # gửi key trước
     send_packet(SERVER_IP, KEY_PORT, key_packet)
+
+    # chờ receiver mở data channel
+    time.sleep(0.5)
+
+    # gửi ciphertext
     send_packet(SERVER_IP, DATA_PORT, data_packet)
 
     lines = [
@@ -73,7 +93,11 @@ def main() -> None:
 
     if LOG_FILE:
         Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
-        Path(LOG_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        Path(LOG_FILE).write_text(
+            "\n".join(lines) + "\n",
+            encoding="utf-8",
+        )
 
 
 if __name__ == "__main__":

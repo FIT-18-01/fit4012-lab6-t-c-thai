@@ -18,98 +18,86 @@ OUTPUT_FILE = os.getenv("OUTPUT_FILE", "")
 LOG_FILE = os.getenv("RECEIVER_LOG_FILE", "")
 
 
+def receive_key_packet() -> bytes:
+    """Listen on KEY_PORT and receive key_length + key + iv."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.settimeout(TIMEOUT)
+        server.bind((HOST, KEY_PORT))
+        server.listen(1)
+        conn, _ = server.accept()
+
+        with conn:
+            conn.settimeout(TIMEOUT)
+            key_len_header = recv_exact(conn, 4)
+            key_len = int.from_bytes(key_len_header, "big")
+            rest = recv_exact(conn, key_len + 16)
+            return key_len_header + rest
+
+
+def receive_data_packet() -> bytes:
+    """Listen on DATA_PORT and receive length + ciphertext."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.settimeout(TIMEOUT)
+        server.bind((HOST, DATA_PORT))
+        server.listen(1)
+        conn, _ = server.accept()
+
+        with conn:
+            conn.settimeout(TIMEOUT)
+            length_header = recv_exact(conn, LENGTH_HEADER_SIZE)
+            length = parse_length_header(length_header)
+            ciphertext = recv_exact(conn, length)
+            return length_header + ciphertext
+
+
 def main() -> None:
     lines = []
 
-    # =========================
-    # KEY CHANNEL
-    # =========================
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as key_server:
-        key_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        key_server.settimeout(TIMEOUT)
+    line = f"[*] Receiver đang lắng nghe kênh khóa tại {HOST}:{KEY_PORT}"
+    print(line)
+    lines.append(line)
 
-        key_server.bind((HOST, KEY_PORT))
-        key_server.listen(1)
-
-        line = f"[*] Receiver đang lắng nghe kênh khóa tại {HOST}:{KEY_PORT}"
-        print(line, flush=True)
-        lines.append(line)
-
-        conn, _ = key_server.accept()
-
-        with conn:
-            conn.settimeout(TIMEOUT)
-
-            key_len_header = recv_exact(conn, 4)
-            key_len = int.from_bytes(key_len_header, "big")
-
-            rest = recv_exact(conn, key_len + 16)
-
-            key_packet = key_len_header + rest
-
+    key_packet = receive_key_packet()
     key, iv = parse_key_packet(key_packet)
 
     line = "[+] Đã nhận AES key và IV."
-    print(line, flush=True)
+    print(line)
     lines.append(line)
 
-    # =========================
-    # DATA CHANNEL
-    # =========================
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as data_server:
-        data_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        data_server.settimeout(TIMEOUT)
+    line = f"[*] Receiver đang lắng nghe kênh dữ liệu tại {HOST}:{DATA_PORT}"
+    print(line)
+    lines.append(line)
 
-        data_server.bind((HOST, DATA_PORT))
-        data_server.listen(1)
-
-        line = f"[*] Receiver đang lắng nghe kênh dữ liệu tại {HOST}:{DATA_PORT}"
-        print(line, flush=True)
-        lines.append(line)
-
-        conn, _ = data_server.accept()
-
-        with conn:
-            conn.settimeout(TIMEOUT)
-
-            length_header = recv_exact(conn, LENGTH_HEADER_SIZE)
-
-            length = parse_length_header(length_header)
-
-            ciphertext = recv_exact(conn, length)
-
-            data_packet = length_header + ciphertext
-
+    data_packet = receive_data_packet()
+    length = parse_length_header(data_packet[:LENGTH_HEADER_SIZE])
     ciphertext = data_packet[LENGTH_HEADER_SIZE:]
 
     if len(ciphertext) != length:
         raise ValueError("Ciphertext nhận được không khớp length header.")
 
     line = "[+] Đã nhận ciphertext."
-    print(line, flush=True)
+    print(line)
     lines.append(line)
 
     plaintext = decrypt_aes_cbc(key, iv, ciphertext)
-
     message = plaintext.decode("utf-8", errors="replace")
 
-    line = "[+] Đã giải mã thành công."
-    print(line, flush=True)
-    lines.append(line)
+    lines.extend([
+        "[+] Đã giải mã thành công.",
+        f"[+] Bản tin gốc: {message}",
+    ])
 
-    line = f"[+] Bản tin gốc: {message}"
-    print(line, flush=True)
-    lines.append(line)
+    print("[+] Đã giải mã thành công.")
+    print(f"[+] Bản tin gốc: {message}")
 
     if OUTPUT_FILE:
         Path(OUTPUT_FILE).write_bytes(plaintext)
 
     if LOG_FILE:
         Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
-        Path(LOG_FILE).write_text(
-            "\n".join(lines) + "\n",
-            encoding="utf-8",
-        )
+        Path(LOG_FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

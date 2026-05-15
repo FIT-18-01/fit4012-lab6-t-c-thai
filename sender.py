@@ -1,5 +1,6 @@
 import os
 import socket
+import time
 from pathlib import Path
 
 from aes_socket_utils import build_data_packet, build_key_packet, encrypt_aes_cbc
@@ -12,6 +13,8 @@ MESSAGE_ENV = os.getenv("MESSAGE")
 INPUT_FILE = os.getenv("INPUT_FILE", "")
 LOG_FILE = os.getenv("SENDER_LOG_FILE", "")
 TIMEOUT = float(os.getenv("SOCKET_TIMEOUT", "10"))
+MAX_CONNECT_ATTEMPTS = int(os.getenv("CONNECT_RETRY_ATTEMPTS", "5"))
+CONNECT_RETRY_DELAY = float(os.getenv("CONNECT_RETRY_DELAY", "0.1"))
 
 
 def get_plaintext() -> bytes:
@@ -27,7 +30,16 @@ def send_packet(host: str, port: int, packet: bytes) -> None:
     """Open one TCP connection and send all bytes."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(TIMEOUT)
-        sock.connect((host, port))
+
+        for attempt in range(1, MAX_CONNECT_ATTEMPTS + 1):
+            try:
+                sock.connect((host, port))
+                break
+            except (ConnectionRefusedError, socket.timeout):
+                if attempt == MAX_CONNECT_ATTEMPTS:
+                    raise
+                time.sleep(CONNECT_RETRY_DELAY)
+
         sock.sendall(packet)
 
 
